@@ -3,460 +3,228 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Purchase Order Form</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <title>Purchase Order Requisition Form</title>
     <style>
-        :root {
-            --primary: #4f46e5;
-            --primary-hover: #4338ca;
-            --secondary: #f43f5e;
-            --secondary-hover: #e11d48;
-            --success: #10b981;
-            --text: #1f2937;
-            --text-light: #6b7280;
-            --bg: #f9fafb;
-            --bg-card: #ffffff;
-            --border: #e5e7eb;
-            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            --radius: 12px;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            padding: 40px 20px;
-            min-height: 100vh;
-            line-height: 1.5;
-        }
-
-        .form-container {
-            background-color: var(--bg-card);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 40px;
-            width: 100%;
-            max-width: 800px;
-            margin: 0 auto;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .form-container::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 6px;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-        }
-
-        h2 {
-            text-align: center;
-            font-size: 28px;
-            font-weight: 700;
-            color: var(--text);
-            margin-bottom: 30px;
-            position: relative;
-            padding-bottom: 15px;
-        }
-
-        h2::after {
-            content: "";
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 60px;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-            border-radius: 2px;
-        }
-
-        .form-section {
-            margin-bottom: 30px;
-            padding-bottom: 30px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .form-section:last-of-type {
-            border-bottom: none;
-        }
-
-        .section-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .section-title svg {
-            width: 24px;
-            height: 24px;
-            color: var(--primary);
-        }
-
-        label {
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 8px;
-            display: block;
-            color: var(--text);
-        }
-
-        input, textarea, select {
-            width: 100%;
-            padding: 12px 16px;
-            margin-bottom: 20px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 15px;
-            font-family: 'Inter', sans-serif;
-            outline: none;
-            transition: all 0.3s;
-            background-color: #f9fafb;
-        }
-
-        input:focus, textarea:focus, select:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
-            background-color: #fff;
-        }
-
-        textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s;
-            outline: none;
-        }
-
-        .btn-primary {
-            background-color: var(--primary);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background-color: var(--primary-hover);
-        }
-
-        .btn-secondary {
-            background-color: var(--secondary);
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background-color: var(--secondary-hover);
-        }
-
-        .btn-success {
-            background-color: var(--success);
-            color: white;
-            width: 100%;
-            padding: 14px;
-            font-size: 16px;
-            font-weight: 600;
-            margin-top: 20px;
-        }
-
-        .btn-success:hover {
-            filter: brightness(1.1);
-        }
-
-        .btn svg {
-            width: 18px;
-            height: 18px;
-        }
-
-        .form-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        @media (max-width: 768px) {
-            .form-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .items-container {
-            margin-bottom: 20px;
-        }
-
-        .item {
-            display: grid;
-            grid-template-columns: 1fr 2fr 1fr 1fr auto;
-            gap: 10px;
-            padding: 16px;
-            border-radius: 8px;
-            background-color: #f9fafb;
-            margin-bottom: 12px;
-            border: 1px solid var(--border);
-            transition: all 0.3s;
-        }
-
-        .item:hover {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        .item input {
-            margin-bottom: 0;
-        }
-
-        .item-header {
-            display: grid;
-            grid-template-columns: 1fr 2fr 1fr 1fr auto;
-            gap: 10px;
-            padding: 0 16px;
-            margin-bottom: 8px;
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--text-light);
-        }
-
-        .remove-btn {
-            background-color: transparent;
-            color: var(--text-light);
-            border: none;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 6px;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .remove-btn:hover {
-            background-color: #fee2e2;
-            color: var(--secondary);
-        }
-
-        .remove-btn svg {
-            width: 18px;
-            height: 18px;
-        }
-
-        .error {
-            color: var(--secondary);
-            margin-bottom: 20px;
-            padding: 12px 16px;
-            background-color: #fee2e2;
-            border-radius: 8px;
-            font-size: 14px;
-            display: none;
-        }
-
-        .error.show {
-            display: block;
-        }
-
-        .form-footer {
-            margin-top: 40px;
-            text-align: center;
-            font-size: 14px;
-            color: var(--text-light);
-        }
-
-        @media (max-width: 600px) {
-            .form-container {
-                padding: 30px 20px;
-            }
-            
-            .item {
-                grid-template-columns: 1fr;
-                gap: 15px;
-            }
-            
-            .item-header {
-                display: none;
-            }
-        }
+        body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .required { color: red; }
+        .char-counter { font-size: 12px; color: #666; margin-top: 2px; }
+        .char-warning { color: #ff6b35; }
+        .char-error { color: #d32f2f; }
+        .items-section { border: 1px solid #ddd; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .item-row { display: grid; grid-template-columns: 3fr 80px 120px 120px 30px; gap: 10px; margin-bottom: 10px; align-items: end; }
+        .total-display { font-size: 18px; font-weight: bold; color: #007bff; text-align: right; margin-top: 10px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .remove-btn { background: #dc3545; padding: 5px 8px; font-size: 12px; }
+        .add-btn { background: #28a745; margin: 10px 0; }
+        .warning-text { background: #fff3cd; border: 1px solid #ffeaa7; padding: 8px; border-radius: 4px; margin-top: 5px; font-size: 12px; }
     </style>
 </head>
 <body>
-    <div class="form-container">
-        <h2>Purchase Order Form</h2>
+    <h1>Purchase Order Requisition Form</h1>
+    
+    <form method="POST" id="requisitionForm">
+        <div class="form-group">
+            <label for="name">Requested By <span class="required">*</span></label>
+            <input type="text" id="name" name="name" required maxlength="25" data-char-limit="25">
+            <div class="char-counter" id="name-counter">0/25 characters</div>
+            <div class="warning-text">Names longer than 25 characters will be truncated</div>
+        </div>
+
+        <div class="form-group">
+            <label for="vendor">Supplier/Vendor Name <span class="required">*</span></label>
+            <input type="text" id="vendor" name="vendor" required maxlength="40" data-char-limit="40">
+            <div class="char-counter" id="vendor-counter">0/40 characters</div>
+            <div class="warning-text">Vendor names longer than 40 characters will be truncated</div>
+        </div>
+
+        <div class="form-group">
+            <label for="vendor_address">Vendor Address</label>
+            <textarea id="vendor_address" name="vendor_address" rows="3" maxlength="150" data-char-limit="150"></textarea>
+            <div class="char-counter" id="vendor_address-counter">0/150 characters</div>
+        </div>
+
+        <div class="form-group">
+            <label for="telephone">Phone Number <span class="required">*</span></label>
+            <input type="tel" id="telephone" name="telephone" required maxlength="15" data-char-limit="15">
+            <div class="char-counter" id="telephone-counter">0/15 characters</div>
+        </div>
+
+        <div class="form-group">
+            <label for="fax">Fax Number</label>
+            <input type="tel" id="fax" name="fax" maxlength="15" data-char-limit="15">
+            <div class="char-counter" id="fax-counter">0/15 characters</div>
+        </div>
+
+        <div class="form-group">
+            <label for="date">Date <span class="required">*</span></label>
+            <input type="date" id="date" name="date" required>
+        </div>
+
+        <div class="form-group">
+            <label for="purpose">PTAO/Purpose <span class="required">*</span></label>
+            <input type="text" id="purpose" name="purpose" required maxlength="30" data-char-limit="30">
+            <div class="char-counter" id="purpose-counter">0/30 characters</div>
+            <div class="warning-text">Purpose longer than 30 characters will be truncated</div>
+        </div>
+
+        <div class="form-group">
+            <label for="notes">Notes/Special Instructions</label>
+            <textarea id="notes" name="notes" rows="2" maxlength="100" data-char-limit="100"></textarea>
+            <div class="char-counter" id="notes-counter">0/100 characters</div>
+        </div>
+
+        <div class="items-section">
+            <h3>Items <span class="required">*</span></h3>
+            <div class="item-row" style="font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
+                <div>Description (max 60 chars)</div>
+                <div>Quantity</div>
+                <div>Unit Price</div>
+                <div>Catalog # (max 15)</div>
+                <div></div>
+            </div>
+            
+            <div id="items-container">
+                <div class="item-row">
+                    <div>
+                        <input type="text" name="item_name[]" placeholder="Item description" required maxlength="60" data-char-limit="60" class="item-desc">
+                        <div class="char-counter">0/60 characters</div>
+                    </div>
+                    <input type="number" name="item_quantity[]" placeholder="1" min="1" step="1" value="1" required class="quantity-input">
+                    <input type="number" name="item_price[]" placeholder="0.00" min="0" step="0.01" required class="price-input">
+                    <div>
+                        <input type="text" name="catalog_number[]" placeholder="Catalog #" maxlength="15" data-char-limit="15" class="catalog-input">
+                        <div class="char-counter">0/15 characters</div>
+                    </div>
+                    <button type="button" class="remove-btn" onclick="removeItem(this)">×</button>
+                </div>
+            </div>
+            
+            <button type="button" class="add-btn" onclick="addItem()">Add Item</button>
+            
+            <div class="total-display">
+                Total: $<span id="total-amount">0.00</span>
+            </div>
+        </div>
         
-        <div id="formErrors" class="error"></div>
-        
-        <form method="POST" action="/" id="purchaseForm">
-            <div class="form-section">
-                <div class="section-title">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    Purchaser Information
-                </div>
-                
-                <div class="form-grid">
-                    <div>
-                        <label for="name">Name of Purchaser</label>
-                        <input type="text" id="name" name="name" required>
-                    </div>
-                    
-                    <div>
-                        <label for="date">Date of Purchase</label>
-                        <input type="date" id="date" name="date" required>
-                    </div>
-                </div>
-                
-                <label for="purpose">Purpose of Purchase</label>
-                <textarea id="purpose" name="purpose" required></textarea>
-            </div>
-            
-            <div class="form-section">
-                <div class="section-title">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                    Vendor Information
-                </div>
-                
-                <label for="vendor">Vendor Name</label>
-                <input type="text" id="vendor" name="vendor" required>
-                
-                <label for="vendor_address">Vendor Address</label>
-                <textarea id="vendor_address" name="vendor_address" placeholder="Complete vendor address including city, state and ZIP" rows="3" required></textarea>
-                
-                <div class="form-grid">
-                    <div>
-                        <label for="telephone">Telephone</label>
-                        <input type="text" id="telephone" name="telephone" required>
-                    </div>
-                    
-                    <div>
-                        <label for="fax">Fax (Optional)</label>
-                        <input type="text" id="fax" name="fax">
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-section">
-                <div class="section-title">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                    </svg>
-                    Order Items
-                </div>
-                
-                <div class="item-header">
-                    <div>Catalog #</div>
-                    <div>Item Name</div>
-                    <div>Quantity</div>
-                    <div>Price ($)</div>
-                    <div></div>
-                </div>
-                
-                <div id="items-container" class="items-container"></div>
-                
-                <button type="button" class="btn btn-primary" onclick="addItem()">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Add Item
-                </button>
-            </div>
-            
-            <button type="submit" class="btn btn-success">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Submit Purchase Order
-            </button>
-            
-            <div class="form-footer">
-                This form will generate a purchase order document and send it to the appropriate department.
-            </div>
-        </form>
-    </div>
+        <button type="submit">Generate Requisition Form</button>
+    </form>
 
     <script>
-        // Add one item by default when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            addItem();
-        });
+        let itemIndex = 1;
+        
+        // Character counter functionality
+        function setupCharacterCounter(input) {
+            const limit = parseInt(input.dataset.charLimit);
+            const counterId = input.id ? input.id + '-counter' : null;
+            
+            function updateCounter() {
+                const currentLength = input.value.length;
+                const counter = counterId ? document.getElementById(counterId) : 
+                               input.parentElement.querySelector('.char-counter');
+                
+                if (counter) {
+                    counter.textContent = `${currentLength}/${limit} characters`;
+                    
+                    // Color coding
+                    counter.className = 'char-counter';
+                    if (currentLength > limit * 0.9) {
+                        counter.classList.add('char-warning');
+                    }
+                    if (currentLength >= limit) {
+                        counter.classList.add('char-error');
+                    }
+                }
+            }
+            
+            input.addEventListener('input', updateCounter);
+            updateCounter();
+        }
+        
+        // Initialize character counters for existing fields
+        document.querySelectorAll('[data-char-limit]').forEach(setupCharacterCounter);
         
         function addItem() {
-            let container = document.getElementById("items-container");
-
-            let div = document.createElement("div");
-            div.classList.add("item");
-
-            div.innerHTML = `
-                <input type="text" name="catalog_number[]" placeholder="Catalog #" required>
-                <input type="text" name="item_name[]" placeholder="Item Name" required>
-                <input type="number" name="item_quantity[]" placeholder="Quantity" min="1" step="1" required>
-                <input type="number" step="0.01" name="item_price[]" placeholder="Price ($)" min="0" required>
-                <button type="button" class="remove-btn" onclick="removeItem(this)">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                </button>
+            const container = document.getElementById('items-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'item-row';
+            newRow.innerHTML = `
+                <div>
+                    <input type="text" name="item_name[]" placeholder="Item description" required maxlength="60" data-char-limit="60" class="item-desc">
+                    <div class="char-counter">0/60 characters</div>
+                </div>
+                <input type="number" name="item_quantity[]" placeholder="1" min="1" step="1" value="1" required class="quantity-input">
+                <input type="number" name="item_price[]" placeholder="0.00" min="0" step="0.01" required class="price-input">
+                <div>
+                    <input type="text" name="catalog_number[]" placeholder="Catalog #" maxlength="15" data-char-limit="15" class="catalog-input">
+                    <div class="char-counter">0/15 characters</div>
+                </div>
+                <button type="button" class="remove-btn" onclick="removeItem(this)">×</button>
             `;
-
-            container.appendChild(div);
+            container.appendChild(newRow);
+            
+            // Setup character counters for new inputs
+            newRow.querySelectorAll('[data-char-limit]').forEach(setupCharacterCounter);
+            
+            itemIndex++;
+            calculateTotal();
         }
-
+        
         function removeItem(button) {
-            // Only remove if there's more than one item
-            let items = document.querySelectorAll('.item');
-            if (items.length > 1) {
+            if (document.querySelectorAll('.item-row').length > 2) { // Keep header + at least 1 item
                 button.parentElement.remove();
-            } else {
-                showError("You must have at least one item in the purchase order.");
+                calculateTotal();
             }
         }
         
-        function showError(message) {
-            let errorDiv = document.getElementById('formErrors');
-            errorDiv.textContent = message;
-            errorDiv.classList.add('show');
-            
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                errorDiv.classList.remove('show');
-            }, 5000);
+        function calculateTotal() {
+            let total = 0;
+            document.querySelectorAll('.item-row').forEach(row => {
+                const quantity = parseFloat(row.querySelector('.quantity-input')?.value || 0);
+                const price = parseFloat(row.querySelector('.price-input')?.value || 0);
+                total += quantity * price;
+            });
+            document.getElementById('total-amount').textContent = total.toFixed(2);
         }
         
-        // Form validation
-        document.getElementById('purchaseForm').addEventListener('submit', function(e) {
-            let errorDiv = document.getElementById('formErrors');
-            errorDiv.textContent = '';
-            errorDiv.classList.remove('show');
-            
-            // Check if at least one item exists
-            let items = document.querySelectorAll('.item');
+        // Add event listeners for real-time calculation
+        document.addEventListener('input', function(e) {
+            if (e.target.classList.contains('quantity-input') || e.target.classList.contains('price-input')) {
+                calculateTotal();
+            }
+        });
+        
+        // Set today's date as default
+        document.getElementById('date').valueAsDate = new Date();
+        
+        // Form validation before submission
+        document.getElementById('requisitionForm').addEventListener('submit', function(e) {
+            const items = document.querySelectorAll('.item-desc');
             if (items.length === 0) {
                 e.preventDefault();
-                showError('Please add at least one item to the purchase order.');
-                return;
+                alert('Please add at least one item to the purchase order.');
+                return false;
             }
             
-            // Basic validation passed, form will submit
-            console.log('Form is being submitted...');
+            // Check for overly long fields
+            const warnings = [];
+            document.querySelectorAll('[data-char-limit]').forEach(input => {
+                if (input.value.length > parseInt(input.dataset.charLimit)) {
+                    const label = input.previousElementSibling?.textContent || 'Field';
+                    warnings.push(`${label} will be truncated (${input.value.length}/${input.dataset.charLimit} chars)`);
+                }
+            });
+            
+            if (warnings.length > 0) {
+                const proceed = confirm(`Warning: Some fields exceed recommended length and will be truncated:\n\n${warnings.join('\n')}\n\nContinue anyway?`);
+                if (!proceed) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
         });
     </script>
 </body>

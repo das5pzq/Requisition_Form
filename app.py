@@ -1,4 +1,4 @@
-from flask import Flask, request, send_file, render_template
+from flask import Flask, request, send_file, render_template, send_from_directory
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from PIL import Image
@@ -18,6 +18,8 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import json
 from googleapiclient.http import MediaFileUpload
+import textwrap
+from reportlab.pdfbase.pdfmetrics import stringWidth
 
 app = Flask(__name__)
 
@@ -32,145 +34,294 @@ EMAIL_RECEIVER = "xxdrp3pp3rxlov3rxx@gmail.com"
 # Path to your template PNG file
 TEMPLATE_IMAGE_PATH = "ir-raw.png"
 
+def truncate_text(text, max_chars, suffix="..."):
+    """Truncate text to fit within character limit"""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars-len(suffix)] + suffix
+
+def wrap_text_to_width(text, max_width, font_name, font_size):
+    """Wrap text to fit within pixel width using reportlab's stringWidth"""
+    if not text:
+        return [""]
+    
+    words = text.split()
+    lines = []
+    current_line = []
+    
+    for word in words:
+        # Test if adding this word exceeds width
+        test_line = " ".join(current_line + [word])
+        if stringWidth(test_line, font_name, font_size) <= max_width:
+            current_line.append(word)
+        else:
+            # Start new line
+            if current_line:
+                lines.append(" ".join(current_line))
+                current_line = [word]
+            else:
+                # Single word is too long, truncate it
+                truncated_word = truncate_text(word, int(max_width / (font_size * 0.6)))
+                lines.append(truncated_word)
+    
+    if current_line:
+        lines.append(" ".join(current_line))
+    
+    return lines
+
+def get_text_width_pil(text, font):
+    """Calculate text width for PIL fonts with better error handling"""
+    if not text:
+        return 0
+        
+    try:
+        # For PIL fonts, use textbbox to get width
+        bbox = font.getbbox(text)
+        return bbox[2] - bbox[0]  # width = right - left
+    except AttributeError:
+        # Fallback for older PIL versions
+        try:
+            return font.getsize(text)[0]
+        except:
+            # Final fallback: estimate based on character count
+            return len(text) * 7
+    except Exception as e:
+        app.logger.warning(f"Error calculating text width: {e}")
+        # Fallback: estimate based on character count and font size
+        font_size = getattr(font, 'size', 12)
+        return len(text) * (font_size * 0.6)
+
+def smart_text_placement(draw_func, x, y, text, max_width, max_lines=1, font_name="Helvetica", font_size=10, pil_font=None):
+    """Enhanced text placement with proper width calculation"""
+    if not text:
+        return y
+    
+    # Calculate text width based on context
+    if pil_font:  # PNG context
+        def get_width(test_text):
+            return get_text_width_pil(test_text, pil_font)
+    else:  # PDF context
+        def get_width(test_text):
+            return stringWidth(test_text, font_name, font_size)
+    
+    # Smart truncation
+    if get_width(text) <= max_width:
+        draw_func(x, y, text)
+        return y
+    
+    # Text is too long, truncate with ellipsis
+    ellipsis = "..."
+    ellipsis_width = get_width(ellipsis)
+    available_width = max_width - ellipsis_width
+    
+    # Binary search to find the longest text that fits
+    left, right = 0, len(text)
+    best_length = 0
+    
+    while left <= right:
+        mid = (left + right) // 2
+        test_text = text[:mid]
+        
+        if get_width(test_text) <= available_width:
+            best_length = mid
+            left = mid + 1
+        else:
+            right = mid - 1
+    
+    truncated_text = text[:best_length] + ellipsis
+    draw_func(x, y, truncated_text)
+    return y
+
 def generate_pdf(data):
-    """Generate PDF with form data placed at predefined positions based on PHP format"""
+    """Generate PDF with enhanced text handling"""
     try:
         # Create Req_Forms directory if it doesn't exist
         output_dir = "Req_Forms"
         os.makedirs(output_dir, exist_ok=True)
         
-        pdf_filename = os.path.join(output_dir, "purchase_order.pdf")
+        # Generate unique filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        pdf_filename = os.path.join(output_dir, f"requisition_{timestamp}.pdf")
         c = canvas.Canvas(pdf_filename, pagesize=letter)
         
         # Ensure template image exists
         if not os.path.exists(TEMPLATE_IMAGE_PATH):
             raise FileNotFoundError(f"Template image '{TEMPLATE_IMAGE_PATH}' not found")
             
-        # Add background image with absolute path
+        # Add background image
         template_path = os.path.abspath(TEMPLATE_IMAGE_PATH)
         c.drawImage(template_path, 0, 0, width=letter[0], height=letter[1])
         
         # Set default font
-        c.setFont("Helvetica", SPACING["font_size"])
+        font_name = "Helvetica"
+        font_size = SPACING["font_size"]
+        c.setFont(font_name, font_size)
         
         # PDF dimensions and coordinate system conversion
         width, height = letter
+        x_scale = width / 15
+        y_scale = height / 14
         
-        # Scale factors to map from LaTeX coordinates to PDF points
-        x_scale = width / 15  # 15 units in LaTeX width
-        y_scale = height / 14  # 14 units in LaTeX height
-        
-        # LaTeX coordinates origin is at bottom left, PDF at top left
-        # So we need to convert y-coordinates
         def y_pos(latex_y):
             return height - (latex_y * y_scale)
         
-        # Extract form data with appropriate defaults
-        vendor_name = data.get("Vendor Name", "")
-        address = data.get("vendor_address", "")
-        tel = data.get("tel", "")
-        fax = data.get("fax", "")
-        ptao = data.get("Purpose of Purchase", "")
-        date = data.get("Date of Purchase", datetime.now().strftime("%B %d, %Y"))
-        notes = data.get("notes", "")
-        req = data.get("Name of Purchaser", "")
-        approver = "Dustin Keller"  # Hardcoded approver name
+        def pdf_draw_text(x, y, text):
+            """Helper function for PDF text drawing"""
+            c.drawString(x, y, text)
         
-        # Position text elements using scaled coordinates from positions.py
+        # Extract and format data with character limits
+        vendor_name = data.get("vendor", "") or data.get("Vendor Name", "")
+        ptao = data.get("purpose", "") or data.get("Purpose of Purchase", "")
+        date = data.get("date", datetime.now().strftime("%m/%d/%Y"))
+        req = data.get("name", "") or data.get("Name of Purchaser", "")
         
-        # Vendor name
-        vendor_name_x, vendor_name_y = POSITIONS["vendor_name"]
-        c.drawString(vendor_name_x * x_scale, y_pos(vendor_name_y), vendor_name)
+        # Field-specific width limits (in pixels)
+        field_widths = {
+            "vendor_name": 200,
+            "ptao": 150,
+            "requestor": 120,
+            "description": 250,
+            "catalog": 80
+        }
         
-        # Supplier/vendor address
-        vendor_x, vendor_y = POSITIONS["vendor_address"]
-        y_position = y_pos(vendor_y)
-        for line in address.split("\n"):
-            c.drawString(vendor_x * x_scale, y_position, line)
-            y_position -= SPACING["address_line"]
-        
-        # Phone
-        phone_x, phone_y = POSITIONS["phone"]
-        c.drawString(phone_x * x_scale, y_pos(phone_y), tel)
-        
-        # Fax
-        fax_x, fax_y = POSITIONS["fax"]
-        c.drawString(fax_x * x_scale, y_pos(fax_y), fax)
+        # Vendor name with smart text placement
+        vendor_x, vendor_y = POSITIONS["vendor_name"]
+        smart_text_placement(
+            pdf_draw_text,
+            vendor_x * x_scale, 
+            y_pos(vendor_y),
+            vendor_name,
+            field_widths["vendor_name"],
+            max_lines=1,
+            font_name=font_name,
+            font_size=font_size
+        )
         
         # Date
         date_x, date_y = POSITIONS["date"]
         c.drawString(date_x * x_scale, y_pos(date_y), date)
         
-        # PTAO/Purpose
+        # PTAO with text wrapping
         ptao_x, ptao_y = POSITIONS["ptao"]
-        c.drawString(ptao_x * x_scale, y_pos(ptao_y), ptao)
+        smart_text_placement(
+            pdf_draw_text,
+            ptao_x * x_scale,
+            y_pos(ptao_y),
+            ptao,
+            field_widths["ptao"],
+            max_lines=1,
+            font_name=font_name,
+            font_size=font_size
+        )
         
-        # Items table
-        items_x, items_y = POSITIONS["items_start"]
-        y_start = y_pos(items_y)
-        
-        # Define column positions based on TABLE_COLUMNS
-        x_quantity = TABLE_COLUMNS["quantity"] * x_scale
-        x_catalog = TABLE_COLUMNS["catalog"] * x_scale
-        x_desc = TABLE_COLUMNS["description"] * x_scale
-        x_unit_price = TABLE_COLUMNS["unit_price"] * x_scale
-        x_total_price = TABLE_COLUMNS["total_price"] * x_scale
-        
-        # Process items
+        # Process items with enhanced formatting
         items = data.get("items", [])
         row_height = SPACING["table_row"]
         total_amount = 0
         
-        for i, item in enumerate(items):
-            if i < 9:  # Limit to 9 items as in PHP
+        items_x, items_y = POSITIONS["items_start"]
+        y_start = y_pos(items_y)
+        
+        for i, item in enumerate(items[:9]):  # Limit to 9 items
+            try:
                 quantity = float(item.get("quantity", 0))
                 catalog_num = item.get("catalog_number", "")
-                description = item.get("name", "")
-                unit_price = float(item.get("price", 0))
+                description = item.get("description", "") or item.get("name", "")
+                unit_price = float(item.get("unit_price", 0)) or float(item.get("price", 0))
                 
-                # Calculate total for this item
                 total_price = quantity * unit_price
                 total_amount += total_price
                 
-                # Format as currency
-                formatted_unit_price = f"${unit_price:.2f}"
-                formatted_total_price = f"${total_price:.2f}"
-                
-                # Position for this row
                 row_y = y_start - (i * row_height)
                 
-                # Draw item row
-                c.drawString(x_quantity, row_y, str(quantity))
-                c.drawString(x_catalog, row_y, catalog_num)
-                c.drawString(x_desc, row_y, description)
-                c.drawString(x_unit_price, row_y, formatted_unit_price)
-                c.drawString(x_total_price, row_y, formatted_total_price)
+                # Quantity (simple)
+                c.drawString(TABLE_COLUMNS["quantity"] * x_scale, row_y, str(int(quantity)))
+                
+                # Catalog number with truncation
+                smart_text_placement(
+                    pdf_draw_text,
+                    TABLE_COLUMNS["catalog"] * x_scale,
+                    row_y,
+                    catalog_num,
+                    field_widths["catalog"],
+                    max_lines=1,
+                    font_name=font_name,
+                    font_size=font_size
+                )
+                
+                # Description with smart wrapping
+                smart_text_placement(
+                    pdf_draw_text,
+                    TABLE_COLUMNS["description"] * x_scale,
+                    row_y,
+                    description,
+                    field_widths["description"],
+                    max_lines=1,
+                    font_name=font_name,
+                    font_size=font_size
+                )
+                
+                # Prices
+                c.drawString(TABLE_COLUMNS["unit_price"] * x_scale, row_y, f"${unit_price:.2f}")
+                c.drawString(TABLE_COLUMNS["total_price"] * x_scale, row_y, f"${total_price:.2f}")
+                
+            except (ValueError, TypeError) as e:
+                app.logger.warning(f"Error processing item {i}: {e}")
+                continue
         
         # Total amount
         total_x, total_y = POSITIONS["total"]
         c.drawString(total_x * x_scale, y_pos(total_y), f"${total_amount:.2f}")
         
-        # Notes
-        notes_x, notes_y = POSITIONS["notes"]
-        if notes:
-            c.drawString(notes_x * x_scale, y_pos(notes_y), f"Notes: {notes}")
-        
-        # Requested by (purchaser name)
+        # Requestor with truncation
         req_x, req_y = POSITIONS["requestor"]
-        c.drawString(req_x * x_scale, y_pos(req_y), req)
+        smart_text_placement(
+            pdf_draw_text,
+            req_x * x_scale,
+            y_pos(req_y),
+            req,
+            field_widths["requestor"],
+            max_lines=1,
+            font_name=font_name,
+            font_size=font_size
+        )
         
-        # Approved by
+        # Approver
         approver_x, approver_y = POSITIONS["approver"]
-        c.drawString(approver_x * x_scale, y_pos(approver_y), approver)
+        c.drawString(approver_x * x_scale, y_pos(approver_y), "Dustin Keller")
         
         c.save()
         return pdf_filename
+        
     except Exception as e:
         app.logger.error(f"Error generating PDF: {str(e)}")
         raise
 
+# Enhanced overlay_on_png function
+def load_font(font_size=12):
+    """Load font with fallbacks for different systems"""
+    font_paths = [
+        "arial.ttf",
+        "/System/Library/Fonts/Arial.ttf",  # macOS
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
+        "C:\\Windows\\Fonts\\arial.ttf",  # Windows
+    ]
+    
+    for font_path in font_paths:
+        try:
+            return ImageFont.truetype(font_path, font_size)
+        except (OSError, IOError):
+            continue
+    
+    # Final fallback
+    try:
+        return ImageFont.load_default()
+    except:
+        app.logger.warning("Could not load any font, using basic fallback")
+        return None
+
 def overlay_on_png(data, debug=False):
-    """Overlay form data onto the PNG template with optional debug grid"""
+    """Enhanced PNG overlay with proper text handling"""
     try:
         if not os.path.exists(TEMPLATE_IMAGE_PATH):
             raise FileNotFoundError(f"Template image '{TEMPLATE_IMAGE_PATH}' not found")
@@ -181,144 +332,164 @@ def overlay_on_png(data, debug=False):
         # Get image dimensions
         width, height = img.size
         
-        # Scale factors to convert from LaTeX coordinates to pixels
-        x_scale = width / 15  # Assuming LaTeX uses ~15 units width
-        y_scale = height / 14  # Assuming LaTeX uses ~14 units height
+        # Scale factors
+        x_scale = width / 15
+        y_scale = height / 14
         
-        # Draw debug grid if requested
-        if debug:
-            # Draw horizontal and vertical grid lines
-            for i in range(0, 15):
-                # Vertical lines
-                x = i * x_scale
-                draw.line([(x, 0), (x, height)], fill="red", width=1)
-                draw.text((x, 10), f"{i}", fill="red")
-                
-            for i in range(0, 14):
-                # Horizontal lines
-                y = i * y_scale
-                draw.line([(0, y), (width, y)], fill="blue", width=1)
-                draw.text((10, y), f"{i}", fill="blue")
-                
-            # For key positions, draw small markers
-            positions = [
-                (3.2, 2.25, "Supplier"),
-                (3.2, 4.1, "Phone"),
-                (3.2, 4.7, "Fax"),
-                (10, 1.75, "Date"),
-                (10, 2.3, "PTAO"),
-                (0.445, 6, "Items"),
-                (13.4, 11.18, "Total"),
-                (0.85, 11.5, "Notes"),
-                (3.25, 12.65, "Requested by")
-            ]
-            
-            for x, y, label in positions:
-                px = x * x_scale
-                py = y * y_scale
-                r = 5  # radius
-                draw.ellipse([(px-r, py-r), (px+r, py+r)], outline="green")
-                draw.text((px+r+2, py), label, fill="green")
+        # Load font with better fallback
+        font = load_font(12)
+        if font is None:
+            app.logger.error("Could not load font for PNG generation")
+            # You might want to raise an exception or use text without font
         
-        # Current date
-        date = data.get("Date of Purchase", datetime.now().strftime("%B %d, %Y"))
+        def png_draw_text(x, y, text):
+            """Helper function for PNG text drawing"""
+            draw.text((x, y), text, font=font, fill="black")
         
-        # Extract supplier/vendor information
-        vendor_name = data.get("Vendor Name", "")
-        address = data.get("vendor_address", "")
-        tel = data.get("tel", "")
+        # Field-specific width limits (in pixels for PNG)
+        field_widths = {
+            "vendor_name": 300,
+            "ptao": 200,
+            "requestor": 150,
+            "description": 350,
+            "catalog": 100
+        }
+        
+        # Extract data with correct keys
+        vendor_name = data.get("vendor", "")
+        ptao = data.get("purpose", "")
+        date = data.get("date", datetime.now().strftime("%m/%d/%Y"))
+        req = data.get("name", "")
+        
+        # BUG: Missing other fields that might be needed
+        telephone = data.get("telephone", "")
         fax = data.get("fax", "")
-        ptao = data.get("Purpose of Purchase", "")
+        vendor_address = data.get("vendor_address", "")
         notes = data.get("notes", "")
-        req = data.get("Name of Purchaser", "")
-        approver = "Dustin Keller"  # Hardcoded approver name
         
-        # Load font
-        font = ImageFont.load_default()  # You should define or load a proper font
-        
-        # Vendor name
+        # Vendor name with smart placement
         vendor_name_x, vendor_name_y = POSITIONS["vendor_name"]
-        draw.text((vendor_name_x * x_scale, vendor_name_y * y_scale), vendor_name, font=font, fill="black")
-        
-        # Supplier/vendor address
-        y_pos = POSITIONS["vendor_address"][1] * y_scale
-        for line in address.split("\n"):
-            draw.text((POSITIONS["vendor_address"][0] * x_scale, y_pos), line, font=font, fill="black")
-            y_pos += 20
-        
-        # Phone
-        draw.text((POSITIONS["phone"][0] * x_scale, POSITIONS["phone"][1] * y_scale), tel, font=font, fill="black")
-        
-        # Fax
-        draw.text((POSITIONS["fax"][0] * x_scale, POSITIONS["fax"][1] * y_scale), fax, font=font, fill="black")
+        smart_text_placement(
+            png_draw_text,
+            vendor_name_x * x_scale,
+            vendor_name_y * y_scale,
+            vendor_name,
+            field_widths["vendor_name"],
+            max_lines=1,
+            font_name="arial",
+            font_size=12,
+            pil_font=font  # Pass PIL font for width calculation
+        )
         
         # Date
-        draw.text((POSITIONS["date"][0] * x_scale, POSITIONS["date"][1] * y_scale), date, font=font, fill="black")
+        date_x, date_y = POSITIONS["date"]
+        draw.text((date_x * x_scale, date_y * y_scale), date, font=font, fill="black")
         
-        # PTAO/Purpose
-        draw.text((POSITIONS["ptao"][0] * x_scale, POSITIONS["ptao"][1] * y_scale), ptao, font=font, fill="black")
+        # PTAO
+        ptao_x, ptao_y = POSITIONS["ptao"]
+        smart_text_placement(
+            png_draw_text,
+            ptao_x * x_scale,
+            ptao_y * y_scale,
+            ptao,
+            field_widths["ptao"],
+            max_lines=1,
+            pil_font=font
+        )
         
-        # Items table
-        y_start = POSITIONS["items_start"][1] * y_scale
-        total_amount = 0
+        # Add missing fields to PNG if needed
+        if telephone:
+            phone_x, phone_y = POSITIONS["phone"]
+            draw.text((phone_x * x_scale, phone_y * y_scale), telephone, font=font, fill="black")
         
-        # Define column positions based on TABLE_COLUMNS
-        x_quantity = TABLE_COLUMNS["quantity"] * x_scale
-        x_catalog = TABLE_COLUMNS["catalog"] * x_scale
-        x_desc = TABLE_COLUMNS["description"] * x_scale
-        x_unit_price = TABLE_COLUMNS["unit_price"] * x_scale
-        x_total_price = TABLE_COLUMNS["total_price"] * x_scale
+        if fax:
+            fax_x, fax_y = POSITIONS["fax"]
+            draw.text((fax_x * x_scale, fax_y * y_scale), fax, font=font, fill="black")
+        
+        # Add vendor address with line breaks
+        if vendor_address:
+            vendor_addr_x, vendor_addr_y = POSITIONS["vendor_address"]
+            y_position = vendor_addr_y * y_scale
+            for line in vendor_address.split("\n")[:3]:  # Limit to 3 lines
+                smart_text_placement(
+                    png_draw_text,
+                    vendor_addr_x * x_scale,
+                    y_position,
+                    line,
+                    field_widths["vendor_name"],
+                    pil_font=font
+                )
+                y_position += SPACING["address_line"]
         
         # Process items
         items = data.get("items", [])
-        row_height = SPACING["table_row"] * y_scale
+        y_start = POSITIONS["items_start"][1] * y_scale
+        total_amount = 0
         
-        for i, item in enumerate(items):
-            if i < 9:  # Limit to 9 items as in PHP
+        for i, item in enumerate(items[:9]):
+            try:
                 quantity = float(item.get("quantity", 0))
                 catalog_num = item.get("catalog_number", "")
-                description = item.get("name", "")
-                unit_price = float(item.get("price", 0))
+                description = item.get("description", "")
+                unit_price = float(item.get("unit_price", 0))
                 
                 total_price = quantity * unit_price
                 total_amount += total_price
                 
-                # Draw item row
-                row_y = y_start + (i * row_height)
-                draw.text((x_quantity, row_y), str(quantity), font=font, fill="black")
-                draw.text((x_catalog, row_y), catalog_num, font=font, fill="black")
-                draw.text((x_desc, row_y), description, font=font, fill="black")
-                draw.text((x_unit_price, row_y), f"${unit_price:.2f}", font=font, fill="black")
-                draw.text((x_total_price, row_y), f"${total_price:.2f}", font=font, fill="black")
+                row_y = y_start + (i * SPACING["table_row"])
+                
+                # Draw with smart text placement
+                draw.text((TABLE_COLUMNS["quantity"] * x_scale, row_y), str(int(quantity)), font=font, fill="black")
+                
+                smart_text_placement(
+                    png_draw_text,
+                    TABLE_COLUMNS["catalog"] * x_scale,
+                    row_y,
+                    catalog_num,
+                    field_widths["catalog"],
+                    pil_font=font
+                )
+                
+                smart_text_placement(
+                    png_draw_text,
+                    TABLE_COLUMNS["description"] * x_scale,
+                    row_y,
+                    description,
+                    field_widths["description"],
+                    pil_font=font
+                )
+                
+                draw.text((TABLE_COLUMNS["unit_price"] * x_scale, row_y), f"${unit_price:.2f}", font=font, fill="black")
+                draw.text((TABLE_COLUMNS["total_price"] * x_scale, row_y), f"${total_price:.2f}", font=font, fill="black")
+                
+            except (ValueError, TypeError) as e:
+                app.logger.warning(f"Error processing PNG item {i}: {e}")
+                continue
         
-        # Total amount
+        # Total and signatures
         draw.text((POSITIONS["total"][0] * x_scale, POSITIONS["total"][1] * y_scale), 
                   f"${total_amount:.2f}", font=font, fill="black")
         
-        # Notes
-        if notes:
-            draw.text((POSITIONS["notes"][0] * x_scale, POSITIONS["notes"][1] * y_scale), 
-                      f"Notes: {notes}", font=font, fill="black")
+        smart_text_placement(
+            png_draw_text,
+            POSITIONS["requestor"][0] * x_scale,
+            POSITIONS["requestor"][1] * y_scale,
+            req,
+            field_widths["requestor"],
+            pil_font=font
+        )
         
-        # Requested by (purchaser name)
-        draw.text((POSITIONS["requestor"][0] * x_scale, POSITIONS["requestor"][1] * y_scale), 
-                  req, font=font, fill="black")
-        
-        # Approved by
         draw.text((POSITIONS["approver"][0] * x_scale, POSITIONS["approver"][1] * y_scale), 
-                  approver, font=font, fill="black")
+                  "Dustin Keller", font=font, fill="black")
         
-        # Generate unique filename with debug indicator
+        # Save file
         suffix = "_debug" if debug else ""
         file_base = f"{req.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d%H%M%S')}{suffix}"
         output_path = os.path.join("Req_Forms", f"{file_base}.png")
-        
-        # Create Req_Forms directory if it doesn't exist
         os.makedirs("Req_Forms", exist_ok=True)
-        
-        # Save the modified image
         img.save(output_path)
         return output_path
+        
     except Exception as e:
         app.logger.error(f"Error overlaying on PNG: {str(e)}")
         raise
@@ -536,43 +707,34 @@ def index():
         if request.method == "POST":
             app.logger.info("Form submitted. Processing data...")
             
-            # Debug: Print all form data
-            app.logger.info(f"Form data: {request.form}")
-            
-            # Validate form data - removed vendor_city, vendor_state, vendor_zip
-            required_fields = ["name", "vendor", "vendor_address", "date", "telephone", "purpose"]
+            # Validate form data
+            required_fields = ["name", "vendor", "date", "telephone", "purpose"]
             missing_fields = [field for field in required_fields if field not in request.form]
             if missing_fields:
                 app.logger.warning(f"Missing required fields: {missing_fields}")
                 return f"Missing required fields: {', '.join(missing_fields)}", 400
 
-            # Use vendor_address directly without combining with city/state/zip
+            # Standardized form data structure
             form_data = {
-                "Name of Purchaser": request.form["name"],
-                "Vendor Name": request.form["vendor"],
-                "vendor_address": request.form["vendor_address"],
-                "Date of Purchase": request.form["date"],
-                "Purpose of Purchase": request.form["purpose"],
-                "tel": request.form["telephone"],
+                "name": request.form["name"],
+                "vendor": request.form["vendor"],
+                "vendor_address": request.form.get("vendor_address", ""),
+                "date": request.form["date"],
+                "purpose": request.form["purpose"],
+                "telephone": request.form["telephone"],
                 "fax": request.form.get("fax", ""),
                 "notes": request.form.get("notes", ""),
                 "items": []
             }
 
-            # Check if there are any items
+            # Process items with correct field mapping
             item_names = request.form.getlist("item_name[]")
             if not item_names:
-                app.logger.warning("No items provided in the form")
                 return "Please add at least one item to the purchase order", 400
                 
             item_quantities = request.form.getlist("item_quantity[]")
             item_prices = request.form.getlist("item_price[]")
             item_catalogs = request.form.getlist("catalog_number[]")
-
-            # Validate items data
-            if len(item_names) != len(item_quantities) or len(item_names) != len(item_prices):
-                app.logger.warning(f"Item data mismatch: names={len(item_names)}, quantities={len(item_quantities)}, prices={len(item_prices)}")
-                return "Invalid items data", 400
 
             for i in range(len(item_names)):
                 try:
@@ -581,51 +743,26 @@ def index():
                     if quantity <= 0 or price < 0:
                         raise ValueError
                 except ValueError:
-                    app.logger.warning(f"Invalid quantity or price: quantity={item_quantities[i]}, price={item_prices[i]}")
                     return "Invalid quantity or price values", 400
 
                 form_data["items"].append({
-                    "name": item_names[i],
-                    "quantity": item_quantities[i],
-                    "price": item_prices[i],
+                    "description": item_names[i],      # Changed from "name" to "description"
+                    "quantity": quantity,              # Store as float
+                    "unit_price": price,               # Changed from "price" to "unit_price"
                     "catalog_number": item_catalogs[i] if i < len(item_catalogs) else ""
                 })
 
-            app.logger.info("Form data validated successfully. Generating documents...")
+            # Generate documents
+            pdf_filename = generate_pdf(form_data)
+            png_filename = overlay_on_png(form_data)
             
-            try:
-                # Generate both PDF and PNG
-                pdf_filename = generate_pdf(form_data)
-                png_filename = overlay_on_png(form_data)
-                app.logger.info(f"Documents generated: PDF={pdf_filename}, PNG={png_filename}")
-            except Exception as e:
-                app.logger.error(f"Document generation failed: {str(e)}", exc_info=True)
-                return "Error: Failed to generate documents. Please check the form data and try again.", 500
-
-            try:
-                send_email(pdf_filename, png_filename, form_data)
-                app.logger.info("Email sent successfully")
-            except Exception as e:
-                app.logger.error(f"Email sending failed: {str(e)}", exc_info=True)
-                return "Error: Failed to send email. The documents were generated but couldn't be sent.", 500
-
-            try:
-                # Use Google Sheets instead of Google Forms
-                success, message = submit_to_google_sheet(form_data, pdf_filename)
-                if not success:
-                    app.logger.warning(f"Google Sheet submission issue: {message}")
-                    return f"Documents were generated and email was sent, but there was an issue with Google Sheet submission: {message}", 200
-                app.logger.info("Google Sheet updated successfully")
-            except Exception as e:
-                app.logger.error(f"Google Sheet submission failed: {str(e)}", exc_info=True)
-                return "Documents were generated and sent via email, but Google Sheet submission failed.", 200
-
-            return "Purchase order processed successfully! Documents were generated, email was sent, and data was recorded in Google Sheets."
+            # Return the PDF file
+            return send_file(pdf_filename, as_attachment=True, download_name="requisition_form.pdf")
 
         return render_template("form.html")
     except Exception as e:
-        app.logger.error(f"Unexpected error in index route: {str(e)}", exc_info=True)
-        return "An unexpected error occurred. Please check the server logs for details.", 500
+        app.logger.error(f"Error: {str(e)}")
+        return "An error occurred processing your request.", 500
 
 def send_email_smtp(pdf_filename, png_filename, data):
     try:
@@ -633,24 +770,26 @@ def send_email_smtp(pdf_filename, png_filename, data):
         msg = MIMEMultipart()
         msg['From'] = EMAIL_SENDER
         msg['To'] = EMAIL_RECEIVER
-        msg['Subject'] = f"Purchase Order Submission - {data['Vendor Name']}"
+        msg['Subject'] = f"Purchase Order Submission - {data.get('vendor', 'Unknown Vendor')}"
         
-        # Add body
+        # Add body with correct data keys
         body = f"""
         Dear {EMAIL_RECEIVER},
         
         Please find the attached purchase order details.
         
         **Purchase Details:**
-        - Name of Purchaser: {data['Name of Purchaser']}
-        - Vendor Name: {data['Vendor Name']}
-        - Date of Purchase: {data['Date of Purchase']}
-        - Purpose of Purchase: {data['Purpose of Purchase']}
+        - Name of Purchaser: {data.get('name', 'Unknown')}
+        - Vendor Name: {data.get('vendor', 'Unknown')}
+        - Date of Purchase: {data.get('date', 'Unknown')}
+        - Purpose of Purchase: {data.get('purpose', 'Unknown')}
+        - Phone: {data.get('telephone', 'N/A')}
+        - Total Items: {len(data.get('items', []))}
         
         The completed purchase order is attached as a PDF and PNG.
         
         Best,
-        {data['Name of Purchaser']}
+        {data.get('name', 'Unknown')}
         """
         msg.attach(MIMEText(body, 'plain'))
         
@@ -681,20 +820,35 @@ def send_email_smtp(pdf_filename, png_filename, data):
         app.logger.error(f"SMTP Error: {str(e)}")
         raise
 
+@app.route('/Req_Forms/<filename>')
+def uploaded_file(filename):
+    """Serve files from the Req_Forms directory"""
+    return send_from_directory('Req_Forms', filename)
+
 @app.route("/calibrate")
 def calibrate():
     """Route to generate test overlays for position calibration"""
     sample_data = {
-        "Vendor Name": "Sample Vendor\nLine 2\nLine 3",
-        "Name of Purchaser": "Test User",
-        "Date of Purchase": datetime.now().strftime("%B %d, %Y"),
-        "Purpose of Purchase": "Test PTAO",
-        "tel": "555-123-4567",
+        "vendor": "Sample Vendor Very Long Name That Might Overflow",
+        "name": "Test User With Long Name",
+        "date": datetime.now().strftime("%m/%d/%Y"),
+        "purpose": "Very Long PTAO Purpose That Exceeds Character Limits",
+        "telephone": "555-123-4567",
         "fax": "555-987-6543",
-        "notes": "These are test notes",
+        "notes": "These are test notes for calibration",
         "items": [
-            {"name": "Test Item 1", "quantity": "1", "price": "10.00", "catalog_number": "ABC123"},
-            {"name": "Test Item 2", "quantity": "2", "price": "20.00", "catalog_number": "DEF456"}
+            {
+                "description": "Very Long Item Description That Should Be Truncated Properly",
+                "quantity": 1,
+                "unit_price": 1299.99,
+                "catalog_number": "VERYLONGCATALOG123"
+            },
+            {
+                "description": "Another Long Test Item",
+                "quantity": 2,
+                "unit_price": 799.50,
+                "catalog_number": "SHORT"
+            }
         ]
     }
     
@@ -703,11 +857,19 @@ def calibrate():
     
     return f"""
     <h1>Position Calibration Tool</h1>
-    <p>A debug overlay has been generated with grid lines at: {debug_path}</p>
-    <p>Open this file to see the coordinate grid.</p>
-    <p>Adjust the x_scale and y_scale values in the code based on the grid.</p>
-    <img src="/{debug_path}" style="max-width: 100%">
+    <p>A debug overlay has been generated: {os.path.basename(debug_path)}</p>
+    <p>Open this file to see the coordinate grid and verify text positioning.</p>
+    <p><a href="/Req_Forms/{os.path.basename(debug_path)}" target="_blank">View Debug Image</a></p>
+    <p>Adjust the POSITIONS values in positions.py based on the grid if needed.</p>
     """
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Create directories if they don't exist
+    os.makedirs("Req_Forms", exist_ok=True)
+    
+    # Debug information
+    print(f"Template image exists: {os.path.exists(TEMPLATE_IMAGE_PATH)}")
+    print(f"Templates directory exists: {os.path.exists('templates')}")
+    print(f"Form template exists: {os.path.exists('templates/form.html')}")
+    
+    app.run(debug=True, host="127.0.0.1", port=5000)
