@@ -462,19 +462,18 @@ def generate_pdf(data):
             "catalog": 1,         # Catalog numbers should be single line
         }
         
-        # Vendor name with multi-line wrapping
+        # UPDATED: Vendor name with multi-line wrapping
         vendor_x, vendor_y = POSITIONS["vendor_name"]
-        rules = scaling_rules["vendor_name"]
-        smart_text_scaling_pdf_with_wrapping(
+        smart_text_scaling_pdf_with_wrapping(  # <-- CHANGED FROM smart_text_scaling_pdf
             c, 
             vendor_x * x_scale, 
             y_pos(vendor_y),
             vendor_name,
             field_widths["vendor_name"],
-            max_lines=field_line_limits["vendor_name"],
-            initial_size=rules["initial"],
-            max_shrink_ratio=rules["min_ratio"],
-            line_spacing=10  # Tighter spacing for form fields
+            max_lines=2,           # Allow 2 lines
+            initial_size=11,
+            max_shrink_ratio=0.7,
+            line_spacing=10
         )
         
         # Date
@@ -482,18 +481,17 @@ def generate_pdf(data):
         c.setFont(font_name, SPACING["font_size"])
         c.drawString(date_x * x_scale, y_pos(date_y), date)
         
-        # PTAO with multi-line support
+        # UPDATED: PTAO with multi-line support
         ptao_x, ptao_y = POSITIONS["ptao"]
-        rules = scaling_rules["ptao"]
-        smart_text_scaling_pdf_with_wrapping(
+        smart_text_scaling_pdf_with_wrapping(  # <-- CHANGED FROM smart_text_scaling_pdf
             c,
             ptao_x * x_scale,
             y_pos(ptao_y),
             ptao,
             field_widths["ptao"],
-            max_lines=field_line_limits["ptao"],
-            initial_size=rules["initial"],
-            max_shrink_ratio=rules["min_ratio"],
+            max_lines=2,           # Allow 2 lines
+            initial_size=10,
+            max_shrink_ratio=0.6,
             line_spacing=10
         )
         
@@ -533,18 +531,17 @@ def generate_pdf(data):
                     max_shrink_ratio=rules["min_ratio"]
                 )
                 
-                # Description - most permissive scaling
-                rules = scaling_rules["description"]
-                smart_text_scaling_pdf_with_wrapping(
+                # UPDATED: Description with multi-line wrapping (most important!)
+                smart_text_scaling_pdf_with_wrapping(  # <-- CHANGED FROM smart_text_scaling_pdf
                     c,
                     TABLE_COLUMNS["description"] * x_scale,
                     row_y,
                     description,
                     field_widths["description"],
-                    max_lines=field_line_limits["description"],  # Allow up to 3 lines
-                    initial_size=rules["initial"],
-                    max_shrink_ratio=rules["min_ratio"],
-                    line_spacing=8  # Very tight for table rows
+                    max_lines=3,        # Allow up to 3 lines for descriptions
+                    initial_size=9,
+                    max_shrink_ratio=0.5,
+                    line_spacing=8      # Tight spacing for table rows
                 )
                 
                 # Prices (simple)
@@ -645,6 +642,9 @@ def overlay_on_png(data, debug=False):
         date = data.get("date", datetime.now().strftime("%m/%d/%Y"))
         req = data.get("name", "")
         
+        items = data.get("items", []) 
+        total_amount = 0 
+        
         # Vendor name with smart placement
         vendor_name_x, vendor_name_y = POSITIONS["vendor_name"]
         smart_text_scaling_png_with_wrapping(
@@ -658,6 +658,11 @@ def overlay_on_png(data, debug=False):
             max_shrink_ratio=0.7,
             line_spacing=15
         )
+        
+        # Date (add this missing field)
+        date_x, date_y = POSITIONS["date"]
+        if font:
+            draw.text((date_x * x_scale, date_y * y_scale), date, font=font, fill="black")
         
         # PTAO with multi-line support
         ptao_x, ptao_y = POSITIONS["ptao"]
@@ -674,6 +679,9 @@ def overlay_on_png(data, debug=False):
         )
         
         # Process items with multi-line descriptions
+        items_x, items_y = POSITIONS["items_start"]  # ← Add this missing line
+        y_start = items_y * y_scale  # ← Fix Y coordinate calculation
+        
         for i, item in enumerate(items[:9]):
             try:
                 quantity = float(item.get("quantity", 0))
@@ -684,10 +692,11 @@ def overlay_on_png(data, debug=False):
                 total_price = quantity * unit_price
                 total_amount += total_price
                 
-                row_y = y_start + (i * SPACING["table_row"])
+                row_y = y_start + (i * SPACING["table_row"])  # ← Fix coordinate calculation
                 
                 # Quantity (simple)
-                draw.text((TABLE_COLUMNS["quantity"] * x_scale, row_y), str(int(quantity)), font=font, fill="black")
+                if font:
+                    draw.text((TABLE_COLUMNS["quantity"] * x_scale, row_y), str(int(quantity)), font=font, fill="black")
                 
                 # Catalog number with scaling
                 smart_text_scaling_png(
@@ -714,16 +723,18 @@ def overlay_on_png(data, debug=False):
                 )
                 
                 # Prices (simple)
-                draw.text((TABLE_COLUMNS["unit_price"] * x_scale, row_y), f"${unit_price:.2f}", font=font, fill="black")
-                draw.text((TABLE_COLUMNS["total_price"] * x_scale, row_y), f"${total_price:.2f}", font=font, fill="black")
+                if font:
+                    draw.text((TABLE_COLUMNS["unit_price"] * x_scale, row_y), f"${unit_price:.2f}", font=font, fill="black")
+                    draw.text((TABLE_COLUMNS["total_price"] * x_scale, row_y), f"${total_price:.2f}", font=font, fill="black")
                 
             except (ValueError, TypeError) as e:
                 app.logger.warning(f"Error processing PNG item {i}: {e}")
                 continue
         
         # Total and signatures
-        draw.text((POSITIONS["total"][0] * x_scale, POSITIONS["total"][1] * y_scale), 
-                  f"${total_amount:.2f}", font=font, fill="black")
+        if font:
+            draw.text((POSITIONS["total"][0] * x_scale, POSITIONS["total"][1] * y_scale), 
+                      f"${total_amount:.2f}", font=font, fill="black")
         
         smart_text_scaling_png(
             draw,
@@ -735,8 +746,9 @@ def overlay_on_png(data, debug=False):
             max_shrink_ratio=0.7
         )
         
-        draw.text((POSITIONS["approver"][0] * x_scale, POSITIONS["approver"][1] * y_scale), 
-                  "Dustin Keller", font=font, fill="black")
+        if font:
+            draw.text((POSITIONS["approver"][0] * x_scale, POSITIONS["approver"][1] * y_scale), 
+                      "Dustin Keller", font=font, fill="black")
         
         # Save file
         suffix = "_debug" if debug else ""
@@ -1145,4 +1157,4 @@ def calibrate():
     """
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='127.0.0.1', port=5001)

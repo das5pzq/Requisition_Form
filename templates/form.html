@@ -10,9 +10,6 @@
         label { display: block; margin-bottom: 5px; font-weight: bold; }
         input, textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
         .required { color: red; }
-        .char-counter { font-size: 12px; color: #666; margin-top: 2px; }
-        .char-warning { color: #ff6b35; }
-        .char-error { color: #d32f2f; }
         .items-section { border: 1px solid #ddd; padding: 15px; margin: 20px 0; border-radius: 4px; }
         .item-row { display: grid; grid-template-columns: 3fr 80px 120px 120px 30px; gap: 10px; margin-bottom: 10px; align-items: end; }
         .total-display { font-size: 18px; font-weight: bold; color: #007bff; text-align: right; margin-top: 10px; }
@@ -20,7 +17,7 @@
         button:hover { background: #0056b3; }
         .remove-btn { background: #dc3545; padding: 5px 8px; font-size: 12px; }
         .add-btn { background: #28a745; margin: 10px 0; }
-        .warning-text { background: #fff3cd; border: 1px solid #ffeaa7; padding: 8px; border-radius: 4px; margin-top: 5px; font-size: 12px; }
+        .info-text { background: #e3f2fd; border: 1px solid #90caf9; padding: 8px; border-radius: 4px; margin-top: 5px; font-size: 12px; color: #1976d2; }
     </style>
 </head>
 <body>
@@ -29,34 +26,29 @@
     <form method="POST" id="requisitionForm">
         <div class="form-group">
             <label for="name">Requested By <span class="required">*</span></label>
-            <input type="text" id="name" name="name" required maxlength="25" data-char-limit="25">
-            <div class="char-counter" id="name-counter">0/25 characters</div>
-            <div class="warning-text">Names longer than 25 characters will be truncated</div>
+            <input type="text" id="name" name="name" required>
+            <div class="info-text">Long names will automatically wrap to multiple lines in the generated form</div>
         </div>
 
         <div class="form-group">
             <label for="vendor">Supplier/Vendor Name <span class="required">*</span></label>
-            <input type="text" id="vendor" name="vendor" required maxlength="40" data-char-limit="40">
-            <div class="char-counter" id="vendor-counter">0/40 characters</div>
-            <div class="warning-text">Vendor names longer than 40 characters will be truncated</div>
+            <input type="text" id="vendor" name="vendor" required>
+            <div class="info-text">Long vendor names will automatically wrap to multiple lines in the generated form</div>
         </div>
 
         <div class="form-group">
             <label for="vendor_address">Vendor Address</label>
-            <textarea id="vendor_address" name="vendor_address" rows="3" maxlength="150" data-char-limit="150"></textarea>
-            <div class="char-counter" id="vendor_address-counter">0/150 characters</div>
+            <textarea id="vendor_address" name="vendor_address" rows="3"></textarea>
         </div>
 
         <div class="form-group">
             <label for="telephone">Phone Number <span class="required">*</span></label>
-            <input type="tel" id="telephone" name="telephone" required maxlength="15" data-char-limit="15">
-            <div class="char-counter" id="telephone-counter">0/15 characters</div>
+            <input type="tel" id="telephone" name="telephone" required>
         </div>
 
         <div class="form-group">
             <label for="fax">Fax Number</label>
-            <input type="tel" id="fax" name="fax" maxlength="15" data-char-limit="15">
-            <div class="char-counter" id="fax-counter">0/15 characters</div>
+            <input type="tel" id="fax" name="fax">
         </div>
 
         <div class="form-group">
@@ -66,38 +58,35 @@
 
         <div class="form-group">
             <label for="purpose">PTAO/Purpose <span class="required">*</span></label>
-            <input type="text" id="purpose" name="purpose" required maxlength="30" data-char-limit="30">
-            <div class="char-counter" id="purpose-counter">0/30 characters</div>
-            <div class="warning-text">Purpose longer than 30 characters will be truncated</div>
+            <input type="text" id="purpose" name="purpose" required>
+            <div class="info-text">Long purposes will automatically wrap to multiple lines in the generated form</div>
         </div>
 
         <div class="form-group">
             <label for="notes">Notes/Special Instructions</label>
-            <textarea id="notes" name="notes" rows="2" maxlength="100" data-char-limit="100"></textarea>
-            <div class="char-counter" id="notes-counter">0/100 characters</div>
+            <textarea id="notes" name="notes" rows="2"></textarea>
         </div>
 
         <div class="items-section">
             <h3>Items <span class="required">*</span></h3>
             <div class="item-row" style="font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
-                <div>Description (max 60 chars)</div>
+                <div>Description</div>
                 <div>Quantity</div>
                 <div>Unit Price</div>
-                <div>Catalog # (max 15)</div>
+                <div>Catalog #</div>
                 <div></div>
             </div>
             
             <div id="items-container">
                 <div class="item-row">
                     <div>
-                        <input type="text" name="item_name[]" placeholder="Item description" required maxlength="60" data-char-limit="60" class="item-desc">
-                        <div class="char-counter">0/60 characters</div>
+                        <input type="text" name="item_name[]" placeholder="Item description" required class="item-desc">
+                        <div class="info-text">Long descriptions will automatically wrap to multiple lines</div>
                     </div>
                     <input type="number" name="item_quantity[]" placeholder="1" min="1" step="1" value="1" required class="quantity-input">
                     <input type="number" name="item_price[]" placeholder="0.00" min="0" step="0.01" required class="price-input">
                     <div>
-                        <input type="text" name="catalog_number[]" placeholder="Catalog #" maxlength="15" data-char-limit="15" class="catalog-input">
-                        <div class="char-counter">0/15 characters</div>
+                        <input type="text" name="catalog_number[]" placeholder="Catalog #" class="catalog-input">
                     </div>
                     <button type="button" class="remove-btn" onclick="removeItem(this)">×</button>
                 </div>
@@ -116,58 +105,23 @@
     <script>
         let itemIndex = 1;
         
-        // Character counter functionality
-        function setupCharacterCounter(input) {
-            const limit = parseInt(input.dataset.charLimit);
-            const counterId = input.id ? input.id + '-counter' : null;
-            
-            function updateCounter() {
-                const currentLength = input.value.length;
-                const counter = counterId ? document.getElementById(counterId) : 
-                               input.parentElement.querySelector('.char-counter');
-                
-                if (counter) {
-                    counter.textContent = `${currentLength}/${limit} characters`;
-                    
-                    // Color coding
-                    counter.className = 'char-counter';
-                    if (currentLength > limit * 0.9) {
-                        counter.classList.add('char-warning');
-                    }
-                    if (currentLength >= limit) {
-                        counter.classList.add('char-error');
-                    }
-                }
-            }
-            
-            input.addEventListener('input', updateCounter);
-            updateCounter();
-        }
-        
-        // Initialize character counters for existing fields
-        document.querySelectorAll('[data-char-limit]').forEach(setupCharacterCounter);
-        
         function addItem() {
             const container = document.getElementById('items-container');
             const newRow = document.createElement('div');
             newRow.className = 'item-row';
             newRow.innerHTML = `
                 <div>
-                    <input type="text" name="item_name[]" placeholder="Item description" required maxlength="60" data-char-limit="60" class="item-desc">
-                    <div class="char-counter">0/60 characters</div>
+                    <input type="text" name="item_name[]" placeholder="Item description" required class="item-desc">
+                    <div class="info-text">Long descriptions will automatically wrap to multiple lines</div>
                 </div>
                 <input type="number" name="item_quantity[]" placeholder="1" min="1" step="1" value="1" required class="quantity-input">
                 <input type="number" name="item_price[]" placeholder="0.00" min="0" step="0.01" required class="price-input">
                 <div>
-                    <input type="text" name="catalog_number[]" placeholder="Catalog #" maxlength="15" data-char-limit="15" class="catalog-input">
-                    <div class="char-counter">0/15 characters</div>
+                    <input type="text" name="catalog_number[]" placeholder="Catalog #" class="catalog-input">
                 </div>
                 <button type="button" class="remove-btn" onclick="removeItem(this)">×</button>
             `;
             container.appendChild(newRow);
-            
-            // Setup character counters for new inputs
-            newRow.querySelectorAll('[data-char-limit]').forEach(setupCharacterCounter);
             
             itemIndex++;
             calculateTotal();
@@ -200,30 +154,13 @@
         // Set today's date as default
         document.getElementById('date').valueAsDate = new Date();
         
-        // Form validation before submission
+        // Simple form validation
         document.getElementById('requisitionForm').addEventListener('submit', function(e) {
             const items = document.querySelectorAll('.item-desc');
             if (items.length === 0) {
                 e.preventDefault();
                 alert('Please add at least one item to the purchase order.');
                 return false;
-            }
-            
-            // Check for overly long fields
-            const warnings = [];
-            document.querySelectorAll('[data-char-limit]').forEach(input => {
-                if (input.value.length > parseInt(input.dataset.charLimit)) {
-                    const label = input.previousElementSibling?.textContent || 'Field';
-                    warnings.push(`${label} will be truncated (${input.value.length}/${input.dataset.charLimit} chars)`);
-                }
-            });
-            
-            if (warnings.length > 0) {
-                const proceed = confirm(`Warning: Some fields exceed recommended length and will be truncated:\n\n${warnings.join('\n')}\n\nContinue anyway?`);
-                if (!proceed) {
-                    e.preventDefault();
-                    return false;
-                }
             }
         });
     </script>
